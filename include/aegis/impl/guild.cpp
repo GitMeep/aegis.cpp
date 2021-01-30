@@ -114,9 +114,9 @@ AEGIS_DECL void guild::_load_voicestate(const json & obj) noexcept
 
 AEGIS_DECL void guild::_load_presence(const json & obj) noexcept
 {
-    json user = obj["user"];
+    json _user = obj["user"];
 
-    auto _member = _find_member(user["id"]);
+    auto _member = _find_member(_user["id"]);
     if (_member == nullptr)
         return;
 
@@ -236,9 +236,8 @@ AEGIS_DECL int64_t guild::base_permissions(const user & _member) const noexcept
         int64_t permissions = role_everyone._permission.get_allow_perms();
 
         auto g = _member.get_guild_info_nocreate(guild_id);
-	if (g == nullptr) {
-		return 0;
-	}
+        if (g == nullptr)
+            return 0;
 
         for (auto & rl : g->roles)
             permissions |= get_role(rl)._permission.get_allow_perms();
@@ -432,7 +431,7 @@ AEGIS_DECL void guild::_load(const json & obj, shards::shard * _shard)
                     if (member.count("deaf") && !member["deaf"].is_null()) g_info.deaf = member["deaf"];
                     if (member.count("mute") && !member["mute"].is_null()) g_info.mute = member["mute"];
 
-                    if (member.count("joined_at") && !member["joined_at"].is_null())// g_info.value()->joined_at = member["joined_at"];
+                    if (member.count("joined_at") && !member["joined_at"].is_null())// g_info.value()->joined_at = obj["joined_at"];
                     {
                         g_info.joined_at = utility::from_iso8601(member["joined_at"]).time_since_epoch().count();
                     }
@@ -1000,16 +999,34 @@ AEGIS_DECL aegis::future<rest::rest_reply> guild::begin_guild_prune(int16_t days
     return aegis::make_exception_future(error::not_implemented);
 }
 
-/**\todo Incomplete. Signature may change
- */
-AEGIS_DECL aegis::future<rest::rest_reply> guild::get_guild_invites()
+AEGIS_DECL aegis::future<gateway::objects::invite> guild::get_guild_invite(std::string invite_code)
+{
+#if !defined(AEGIS_DISABLE_ALL_CACHE)
+    if (!perms().can_manage_guild())
+        return aegis::make_exception_future<gateway::objects::invite>(error::no_permission);
+#endif
+
+    return _bot->get_ratelimit().post_task<gateway::objects::invite>({ fmt::format("/invites/{}", invite_code), rest::Get });
+}
+
+AEGIS_DECL aegis::future<gateway::objects::invites> guild::get_guild_invites()
+{
+#if !defined(AEGIS_DISABLE_ALL_CACHE)
+    if (!perms().can_manage_guild())
+        return aegis::make_exception_future<gateway::objects::invites>(error::no_permission);
+#endif
+
+    return _bot->get_ratelimit().post_task<gateway::objects::invites>({ fmt::format("/guilds/{}/invites", guild_id), rest::Get });
+}
+
+AEGIS_DECL aegis::future<rest::rest_reply> guild::delete_guild_invite(std::string invite_code)
 {
 #if !defined(AEGIS_DISABLE_ALL_CACHE)
     if (!perms().can_manage_guild())
         return aegis::make_exception_future(error::no_permission);
 #endif
 
-    return aegis::make_exception_future(error::not_implemented);
+    return _bot->get_ratelimit().post_task({ fmt::format("/invites/{}", invite_code), rest::Delete });
 }
 
 /**\todo Incomplete. Signature may change
